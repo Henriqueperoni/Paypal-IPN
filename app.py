@@ -1,7 +1,10 @@
 import os
+from os import path
+if path.exists("env.py"):
+    import env
 from flask import Flask, render_template, request
 import requests
-import smtplib, ssl
+import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -10,8 +13,6 @@ app = Flask(__name__)
 
 @app.route("/")
 def index():
-    import sys
-    print(sys.path)
     return render_template("index.html")
 
 
@@ -43,71 +44,59 @@ def paypal_listener():
     print(f'Text: {r.text}')
     print('Sending email')
     # Check return message and take action as needed
+
+    # PayPal response variables
     payerFirstName = params['first_name']
     payerLastName = params['last_name']
     payer_email = params['payer_email']
     item_name = params['item_name']
     quantity = params['quantity']
     price = params['mc_gross']
+    currency = params['mc_currency']
     invoice = params['invoice']
 
-    sender_email = "henriqueperoni94@gmail.com"
+    """
+    Sending confirmation email adapted from:
+    #https://realpython.com/python-send-email/ and
+    https://stackoverflow.com/a/882770
+    """
+    # Email variables
+    sender_email = os.environ.get('EMAIL_HOST_USER')
     receiver_email = payer_email
-    password = ''
+    password = os.environ.get('PASSWORD')
 
     message = MIMEMultipart("alternative")
-    message["Subject"] = "multipart test"
+    message["Subject"] = f"Payment confirmation of invoice {invoice} on PayPal"
     message["From"] = sender_email
     message["To"] = receiver_email
 
     # Create the plain-text and HTML version of your message
-    text = """\
-    Hi,
-    How are you?
-    Real Python has many great tutorials:
-    www.realpython.com"""
-    html = """\
-    <html>
-    <body>
-        <p>Hi,<br>
-        How are you?<br>
-        <a href="http://www.realpython.com">Real Python</a>
-        has many great tutorials.
-        </p>
-    </body>
-    </html>
-    """
+    text = f"""\
+Hi {payerFirstName},
 
-    # Turn these into plain/html MIMEText objects
-    part1 = MIMEText(text, "plain")
-    part2 = MIMEText(html, "html")
+Thanks for choosing PayPal for your payment method.
+The payment of the {item_name} has been verified and \
+successfully completed for {currency}{price}.
 
-    # Add HTML/plain-text parts to MIMEMultipart message
-    # The email client will try to render the last part first
-    message.attach(part1)
-    message.attach(part2)
 
-    context = ssl.create_default_context()
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
-        server.starttls()
-        server.login(sender_email, password)
-        server.sendmail(
-            sender_email, receiver_email, message.as_string()
-        )
+Regards,
+PayPal Team
+"""
 
-    message = f'Hi {payerFirstName} Your purchase went all good\
-        \n\n{payerLastName} that is your last name and\nYou bough \
-        {quantity}x €{item_name} at {price}\n\
-            That is your invoice ID: {invoice}'
+    # Turn these into plain/ MIMEText objects
+    messageBody = MIMEText(text, "plain")
 
-    # server = smtplib.SMTP("smtp.gmail.com", 587)
-    # print('email sent')
-    # server.starttls()
-    # print('email sent1')
-    # server.login("henriqueperoni94@gmail.com", "")
-    # print('email sent2')
-    # server.sendmail("henriqueperoni94@gmail.com", payer_email, message)
-    # print('email sent3')
+    # Add plain-text parts to MIMEMultipart message
+    message.attach(messageBody)
+
+    # Send the message via local SMTP server.
+    server = smtplib.SMTP("smtp.gmail.com", 587)
+    server.starttls()
+    server.login(sender_email, password)
+    server.sendmail(
+        sender_email, receiver_email, message.as_string()
+    )
+
     if r.text == 'VERIFIED':
         print('VERIFIED')
 
