@@ -24,15 +24,12 @@ def paypal_listener():
     # Switch as appropriate
     VERIFY_URL = VERIFY_URL_TEST
 
-    print('Receiving IPN')
     # Read and parse query string
     params = (request.form).to_dict()
 
     # Add '_notify-validate' parameter
     params['cmd'] = '_notify-validate'
-    print(params)
 
-    print('Sending request back')
     # Post back to PayPal for validation
 
     headers = {'content-type': 'application/x-www-form-urlencoded',
@@ -40,71 +37,65 @@ def paypal_listener():
 
     r = requests.post(VERIFY_URL, params=params, headers=headers, verify=True)
     # r.raise_for_status()
-    print("Getting final response")
-    print(f'Text: {r.text}')
-    print('Sending email')
-    # Check return message and take action as needed
 
-    # PayPal response variables
-    payerFirstName = params['first_name']
-    payerLastName = params['last_name']
-    payer_email = params['payer_email']
-    item_name = params['item_name']
-    quantity = params['quantity']
-    price = params['mc_gross']
-    currency = params['mc_currency']
-    invoice = params['invoice']
+    if r.text == 'VERIFIED':
+        # Check return message and take action as needed
 
-    """
-    Sending confirmation email adapted from:
-    #https://realpython.com/python-send-email/ and
-    https://stackoverflow.com/a/882770
-    """
-    # Email variables
-    sender_email = os.environ.get('EMAIL_HOST_USER')
-    receiver_email = payer_email
-    password = os.environ.get('PASSWORD')
+        # PayPal response variables
+        payerFirstName = params['first_name']
+        payer_email = params['payer_email']
+        item_name = params['item_name']
+        price = params['mc_gross']
+        currency = params['mc_currency']
+        invoice = params['invoice']
 
-    message = MIMEMultipart("alternative")
-    message["Subject"] = f"Payment confirmation of invoice {invoice} on PayPal"
-    message["From"] = sender_email
-    message["To"] = receiver_email
+        """
+        Sending confirmation email adapted from:
+        #https://realpython.com/python-send-email/ and
+        https://stackoverflow.com/a/882770
+        """
+        # Email variables
+        sender_email = os.environ.get('EMAIL_HOST_USER')
+        receiver_email = payer_email
+        password = os.environ.get('PASSWORD')
 
-    # Create the plain-text and HTML version of your message
-    text = f"""\
+        message = MIMEMultipart("alternative")
+        message["Subject"] = f"Payment confirmation of\
+             invoice {invoice} on PayPal"
+        message["From"] = sender_email
+        message["To"] = receiver_email
+
+        # Create the plain-text and HTML version of your message
+        text = f"""\
 Hi {payerFirstName},
 
 Thanks for choosing PayPal for your payment method.
-The payment of the {item_name} has been verified and \
-successfully completed for {currency}{price}.
+The payment of the {item_name} has been verified and successfully completed for {currency}{price}.
 
 
 Regards,
 PayPal Team
 """
 
-    # Turn these into plain/ MIMEText objects
-    messageBody = MIMEText(text, "plain")
+        # Turn these into plain/ MIMEText objects
+        messageBody = MIMEText(text, "plain")
 
-    # Add plain-text parts to MIMEMultipart message
-    message.attach(messageBody)
+        # Add plain-text parts to MIMEMultipart message
+        message.attach(messageBody)
 
-    # Send the message via local SMTP server.
-    server = smtplib.SMTP("smtp.gmail.com", 587)
-    server.starttls()
-    server.login(sender_email, password)
-    server.sendmail(
-        sender_email, receiver_email, message.as_string()
-    )
-
-    if r.text == 'VERIFIED':
-        print('VERIFIED')
+        # Send the message via local SMTP server.
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(sender_email, password)
+        server.sendmail(
+            sender_email, receiver_email, message.as_string()
+        )
 
     elif r.text == 'INVALID':
         print('INVALID')
     else:
-        pass
-    return 'paypal'
+        print(r.text)
+    return 'IPN Listener Complete'
 
 
 if __name__ == "__main__":
